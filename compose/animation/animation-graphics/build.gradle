@@ -66,6 +66,8 @@ if(AndroidXComposePlugin.isMultiplatformEnabled(project)) {
     androidXComposeMultiplatform {
         android()
         desktop()
+        darwin()
+        js()
     }
 
     kotlin {
