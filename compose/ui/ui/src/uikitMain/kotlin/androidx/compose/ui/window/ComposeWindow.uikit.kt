@@ -17,6 +17,8 @@
 package androidx.compose.ui.window
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.LocalLayerContainer
 import androidx.compose.ui.createSkiaLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -49,7 +51,10 @@ import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSSelectorFromString
 import platform.Foundation.NSValue
 import platform.UIKit.CGRectValue
+import platform.UIKit.UIApplication
 import platform.UIKit.UIScreen
+import platform.UIKit.UITextAutocapitalizationType
+import platform.UIKit.UIView
 import platform.UIKit.UIViewController
 import platform.UIKit.UIViewControllerTransitionCoordinatorProtocol
 import platform.UIKit.reloadInputViews
@@ -75,7 +80,7 @@ fun ComposeUIViewController(content: @Composable () -> Unit): UIViewController =
 fun Application(
     title: String = "JetpackNativeWindow",
     content: @Composable () -> Unit = { }
-):UIViewController = ComposeUIViewController(content)
+): UIViewController = ComposeUIViewController(content)
 
 @ExportObjCClass
 internal actual class ComposeWindow : UIViewController {
@@ -90,59 +95,59 @@ internal actual class ComposeWindow : UIViewController {
 
     private lateinit var layer: ComposeLayer
     private lateinit var content: @Composable () -> Unit
-    private val keyboardVisibilityListener = object : NSObject() {
-        @Suppress("unused")
-        @ObjCAction
-        fun keyboardWillShow(arg: NSNotification) {
-            val keyboardInfo = arg.userInfo!!["UIKeyboardFrameEndUserInfoKey"] as NSValue
-            val keyboardHeight = keyboardInfo.CGRectValue().useContents { size.height }
-            val screenHeight = UIScreen.mainScreen.bounds.useContents { size.height }
-            val magicMultiplier = density.density - 1 // todo magic number
-            val viewY = UIScreen.mainScreen.coordinateSpace.convertPoint(
-                point = CGPointMake(0.0, 0.0),
-                fromCoordinateSpace = view.coordinateSpace
-            ).useContents { y } * magicMultiplier
-            val focused = layer.getActiveFocusRect()
-            if (focused != null) {
-                val focusedBottom = focused.bottom.value + getTopLeftOffset().y
-                val hiddenPartOfFocusedElement =
-                    focusedBottom + keyboardHeight - screenHeight - viewY
-                if (hiddenPartOfFocusedElement > 0) {
-                    // If focused element hidden by keyboard, then change UIView bounds.
-                    // Focused element will be visible
-                    val focusedTop = focused.top.value
-                    val composeOffsetY = if (hiddenPartOfFocusedElement < focusedTop) {
-                        hiddenPartOfFocusedElement
-                    } else {
-                        maxOf(focusedTop, 0f).toDouble()
-                    }
-                    view.setClipsToBounds(true)
-                    val (width, height) = getViewFrameSize()
-                    view.layer.setBounds(
-                        CGRectMake(
-                            x = 0.0,
-                            y = composeOffsetY,
-                            width = width.toDouble(),
-                            height = height.toDouble()
-                        )
-                    )
-                }
-            }
-        }
-
-        @Suppress("unused")
-        @ObjCAction
-        fun keyboardWillHide(arg: NSNotification) {
-            val (width, height) = getViewFrameSize()
-            view.layer.setBounds(CGRectMake(0.0, 0.0, width.toDouble(), height.toDouble()))
-        }
-
-        @Suppress("unused")
-        @ObjCAction
-        fun keyboardDidHide(arg: NSNotification) {
-            view.setClipsToBounds(false)
-        }
-    }
+//    private val keyboardVisibilityListener = object : NSObject() {
+//        @Suppress("unused")
+//        @ObjCAction
+//        fun keyboardWillShow(arg: NSNotification) {
+//            val keyboardInfo = arg.userInfo!!["UIKeyboardFrameEndUserInfoKey"] as NSValue
+//            val keyboardHeight = keyboardInfo.CGRectValue().useContents { size.height }
+//            val screenHeight = UIScreen.mainScreen.bounds.useContents { size.height }
+//            val magicMultiplier = density.density - 1 // todo magic number
+//            val viewY = UIScreen.mainScreen.coordinateSpace.convertPoint(
+//                point = CGPointMake(0.0, 0.0),
+//                fromCoordinateSpace = view.coordinateSpace
+//            ).useContents { y } * magicMultiplier
+//            val focused = layer.getActiveFocusRect()
+//            if (focused != null) {
+//                val focusedBottom = focused.bottom.value + getTopLeftOffset().y
+//                val hiddenPartOfFocusedElement =
+//                    focusedBottom + keyboardHeight - screenHeight - viewY
+//                if (hiddenPartOfFocusedElement > 0) {
+//                    // If focused element hidden by keyboard, then change UIView bounds.
+//                    // Focused element will be visible
+//                    val focusedTop = focused.top.value
+//                    val composeOffsetY = if (hiddenPartOfFocusedElement < focusedTop) {
+//                        hiddenPartOfFocusedElement
+//                    } else {
+//                        maxOf(focusedTop, 0f).toDouble()
+//                    }
+//                    view.setClipsToBounds(true)
+//                    val (width, height) = getViewFrameSize()
+//                    view.layer.setBounds(
+//                        CGRectMake(
+//                            x = 0.0,
+//                            y = composeOffsetY,
+//                            width = width.toDouble(),
+//                            height = height.toDouble()
+//                        )
+//                    )
+//                }
+//            }
+//        }
+//
+//        @Suppress("unused")
+//        @ObjCAction
+//        fun keyboardWillHide(arg: NSNotification) {
+//            val (width, height) = getViewFrameSize()
+//            view.layer.setBounds(CGRectMake(0.0, 0.0, width.toDouble(), height.toDouble()))
+//        }
+//
+//        @Suppress("unused")
+//        @ObjCAction
+//        fun keyboardDidHide(arg: NSNotification) {
+//            view.setClipsToBounds(false)
+//        }
+//    }
 
     override fun loadView() {
         val skiaLayer = createSkiaLayer()
@@ -219,7 +224,12 @@ internal actual class ComposeWindow : UIViewController {
             getTopLeftOffset = ::getTopLeftOffset,
             input = uiKitTextInputService.skikoInput,
         )
-        layer.setContent(content = content)
+        layer.setContent(content = {
+            CompositionLocalProvider(
+                LocalLayerContainer provides skikoUIView,
+                content = content
+            )
+        })
     }
 
     override fun viewWillTransitionToSize(
@@ -241,43 +251,43 @@ internal actual class ComposeWindow : UIViewController {
         layer.setDensity(density)
         val scale = density.density
         layer.setSize((width * scale).roundToInt(), (height * scale).roundToInt())
-        NSNotificationCenter.defaultCenter.addObserver(
-            observer = keyboardVisibilityListener,
-            selector = NSSelectorFromString("keyboardWillShow:"),
-            name = platform.UIKit.UIKeyboardWillShowNotification,
-            `object` = null
-        )
-        NSNotificationCenter.defaultCenter.addObserver(
-            observer = keyboardVisibilityListener,
-            selector = NSSelectorFromString("keyboardWillHide:"),
-            name = platform.UIKit.UIKeyboardWillHideNotification,
-            `object` = null
-        )
-        NSNotificationCenter.defaultCenter.addObserver(
-            observer = keyboardVisibilityListener,
-            selector = NSSelectorFromString("keyboardDidHide:"),
-            name = platform.UIKit.UIKeyboardDidHideNotification,
-            `object` = null
-        )
+//        NSNotificationCenter.defaultCenter.addObserver(
+//            observer = keyboardVisibilityListener,
+//            selector = NSSelectorFromString("keyboardWillShow:"),
+//            name = platform.UIKit.UIKeyboardWillShowNotification,
+//            `object` = null
+//        )
+//        NSNotificationCenter.defaultCenter.addObserver(
+//            observer = keyboardVisibilityListener,
+//            selector = NSSelectorFromString("keyboardWillHide:"),
+//            name = platform.UIKit.UIKeyboardWillHideNotification,
+//            `object` = null
+//        )
+//        NSNotificationCenter.defaultCenter.addObserver(
+//            observer = keyboardVisibilityListener,
+//            selector = NSSelectorFromString("keyboardDidHide:"),
+//            name = platform.UIKit.UIKeyboardDidHideNotification,
+//            `object` = null
+//        )
     }
 
     // viewDidUnload() is deprecated and not called.
     override fun viewDidDisappear(animated: Boolean) {
-        NSNotificationCenter.defaultCenter.removeObserver(
-            observer = keyboardVisibilityListener,
-            name = platform.UIKit.UIKeyboardWillShowNotification,
-            `object` = null
-        )
-        NSNotificationCenter.defaultCenter.removeObserver(
-            observer = keyboardVisibilityListener,
-            name = platform.UIKit.UIKeyboardWillHideNotification,
-            `object` = null
-        )
-        NSNotificationCenter.defaultCenter.removeObserver(
-            observer = keyboardVisibilityListener,
-            name = platform.UIKit.UIKeyboardDidHideNotification,
-            `object` = null
-        )
+//        NSNotificationCenter.defaultCenter.removeObserver(
+//            observer = keyboardVisibilityListener,
+//            name = platform.UIKit.UIKeyboardWillShowNotification,
+//            `object` = null
+//        )
+//        NSNotificationCenter.defaultCenter.removeObserver(
+//            observer = keyboardVisibilityListener,
+//            name = platform.UIKit.UIKeyboardWillHideNotification,
+//            `object` = null
+//        )
+//        NSNotificationCenter.defaultCenter.removeObserver(
+//            observer = keyboardVisibilityListener,
+//            name = platform.UIKit.UIKeyboardDidHideNotification,
+//            `object` = null
+//        )
     }
 
     actual fun setContent(
