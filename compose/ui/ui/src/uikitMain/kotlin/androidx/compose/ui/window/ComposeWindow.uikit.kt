@@ -26,9 +26,6 @@ import androidx.compose.ui.interop.LocalLayerContainer
 import androidx.compose.ui.interop.LocalUIViewController
 import androidx.compose.ui.native.ComposeLayer
 import androidx.compose.ui.platform.*
-import androidx.compose.ui.platform.DefaultInputModeManager
-import androidx.compose.ui.platform.Platform
-import androidx.compose.ui.platform.UIKitTextInputService
 import androidx.compose.ui.text.input.PlatformTextInputService
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpOffset
@@ -40,10 +37,6 @@ import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExportObjCClass
 import kotlinx.cinterop.ObjCAction
 import kotlinx.cinterop.useContents
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.launch
 import org.jetbrains.skiko.SkikoUIView
 import org.jetbrains.skiko.TextActions
 import platform.CoreGraphics.CGPointMake
@@ -51,8 +44,6 @@ import platform.CoreGraphics.CGRectMake
 import platform.CoreGraphics.CGSize
 import platform.Foundation.NSCoder
 import platform.Foundation.NSNotification
-import platform.Foundation.NSNotificationCenter
-import platform.Foundation.NSSelectorFromString
 import platform.Foundation.NSValue
 import platform.UIKit.CGRectValue
 import platform.UIKit.UIColor
@@ -88,7 +79,7 @@ fun ComposeUIViewController(content: @Composable () -> Unit): UIViewController =
 fun Application(
     title: String = "JetpackNativeWindow",
     content: @Composable () -> Unit = { }
-):UIViewController = ComposeUIViewController(content)
+): UIViewController = ComposeUIViewController(content)
 
 @ExportObjCClass
 internal actual class ComposeWindow : UIViewController {
@@ -285,47 +276,7 @@ internal actual class ComposeWindow : UIViewController {
         layer.setSize((width * scale).roundToInt(), (height * scale).roundToInt())
     }
 
-    override fun viewDidAppear(animated: Boolean) {
-        super.viewDidAppear(animated)
-        NSNotificationCenter.defaultCenter.addObserver(
-            observer = keyboardVisibilityListener,
-            selector = NSSelectorFromString("keyboardWillShow:"),
-            name = platform.UIKit.UIKeyboardWillShowNotification,
-            `object` = null
-        )
-        NSNotificationCenter.defaultCenter.addObserver(
-            observer = keyboardVisibilityListener,
-            selector = NSSelectorFromString("keyboardWillHide:"),
-            name = platform.UIKit.UIKeyboardWillHideNotification,
-            `object` = null
-        )
-        NSNotificationCenter.defaultCenter.addObserver(
-            observer = keyboardVisibilityListener,
-            selector = NSSelectorFromString("keyboardDidHide:"),
-            name = platform.UIKit.UIKeyboardDidHideNotification,
-            `object` = null
-        )
-    }
-
     // viewDidUnload() is deprecated and not called.
-    override fun viewDidDisappear(animated: Boolean) {
-        super.viewDidDisappear(animated)
-        NSNotificationCenter.defaultCenter.removeObserver(
-            observer = keyboardVisibilityListener,
-            name = platform.UIKit.UIKeyboardWillShowNotification,
-            `object` = null
-        )
-        NSNotificationCenter.defaultCenter.removeObserver(
-            observer = keyboardVisibilityListener,
-            name = platform.UIKit.UIKeyboardWillHideNotification,
-            `object` = null
-        )
-        NSNotificationCenter.defaultCenter.removeObserver(
-            observer = keyboardVisibilityListener,
-            name = platform.UIKit.UIKeyboardDidHideNotification,
-            `object` = null
-        )
-    }
 
     override fun didReceiveMemoryWarning() {
         println("didReceiveMemoryWarning")
@@ -347,6 +298,10 @@ internal actual class ComposeWindow : UIViewController {
     actual fun dispose() {
         layer.dispose()
     }
+
+    // TODO override method and notify updates!
+//    override fun viewSafeAreaInsetsDidChange() {
+//    }
 
     private fun getViewFrameSize(): IntSize {
         val (width, height) = view.frame().useContents { this.size.width to this.size.height }
